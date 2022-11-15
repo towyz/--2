@@ -13,7 +13,6 @@ class Node:
     def __init__(self, name: str, portFile: BufferedWriter,
                  topoFile: BufferedWriter) -> None:
         self.name = name
-        self.topoFile = topoFile
         self.portDict = self.initAllNodesPort(portFile)
         self.costDict = self.initNodeCost(topoFile)
         for node in self.portDict.keys():
@@ -39,7 +38,7 @@ class Node:
         '''
         costDict = {}
         # 将自己与自己的距离设置为0
-        costDict.update({self.name, 0})
+        costDict.update({self.name: 0})
         for line in file:
             topoList = re.findall(r"\w+", line)
             if self.name == topoList[0]:
@@ -50,8 +49,13 @@ class Node:
                 costDict.update({topoList[0]: 1000})  # 初始化的时候默认为1000，表示没有建立连接
         return costDict
 
-    def getCostFromCertainNode(self, nodeCertain: str) -> int:
-        for line in self.topoFile:
+    def updateCostFromCertainNode(self, nodeCertain: str) -> None:
+        '''
+        模拟确定开销的过程
+        '''
+        # 在这里用文件流没用，已经用过了，得重新打开
+        file = open("./topology.txt", "r", encoding='utf-8')
+        for line in file:
             topoList = re.findall(r"\w+", line)
             if (self.name == topoList[0] and nodeCertain == topoList[1]) or (
                     self.name == topoList[1] and nodeCertain == topoList[0]):
