@@ -5,8 +5,6 @@ from io import BufferedWriter
 class Node:
     name = ''
     port = ''
-    portFile = ''
-    topoFile = ''
     portDict = {}  # 接收信息的端口号
     costDict = {}  # 到达各个节点的开销
     neighborName = []  # 能够发送消息到达的节点（邻居节点）的名称
@@ -57,27 +55,62 @@ class Node:
                 self.neighborName.append(topoList[0])
         self.costDict = costDict
 
-    def updateCostFromCertainNode(self, nodeCertain: str) -> None:
-        '''
-        在接收到 PING_MSG 之后，更新本节点和源节点间通信的的开销\n
-        模拟确定开销的过程
-        '''
-        # 在这里用文件流没用，已经用完了的，得重新打开
-        file = open("./topology.txt", "r", encoding='utf-8')
-        for line in file:
-            topoList = re.findall(r"\w+", line)
-            if (self.name == topoList[0] and nodeCertain == topoList[1]) or (
-                    self.name == topoList[1] and nodeCertain == topoList[0]):
-                self.costDict.update({nodeCertain: topoList[2]})
-
-    def updateNodeCost(self):
+    def updateNodeCost(self, fromNode: str, costList=[]):
         '''
         接收到 PING_MSG_REPLY 或 PATH_DISTANCE_MSG 后，更新节点间通信的的开销
         '''
         pass
 
-    def refreshRoute(self):
-        pass
+    def updateCostAndRoute(self,
+                           msgtype: str,
+                           fromNode: str,
+                           costList=[]) -> None:
+        '''
+        根据接收到的信息类型处理数据，更新路由表
+        '''
+        if msgtype == "PING_MSG":
+            # 在这里用文件流没用，已经用完了的，得重新打开
+            # 在接收到 PING_MSG 之后，更新本节点和源节点间通信的的开销
+            # 模拟确定开销的过程
+            file = open("./topology.txt", "r", encoding='utf-8')
+            for line in file:
+                topoList = re.findall(r"\w+", line)
+                if (self.name == topoList[0] and fromNode == topoList[1]) or (
+                        self.name == topoList[1] and fromNode == topoList[0]):
+                    self.costDict.update({fromNode: topoList[2]})
+            # 只需要加入一条新路由即可
+            self.routeList.append([fromNode, fromNode])
+        elif msgtype == "PING_MSG_REPLY":
+            for i in costList:
+                # 传回的开销不是 fromNode 到 fromNode ，也不是未连接状态
+                if i[1] != 0 and i[1] < 1000:
+                    # 如果是到本节点的开销，直接更新
+                    if i[0] == self.name:
+                        self.costDict.update({fromNode: i[1]})
+                        self.routeList.append([fromNode, fromNode])
+                    # 如果到某一节点的开销为空，直接更新
+                    elif self.costDict.get(i[0]) is None:
+                        self.costDict.update(
+                            {i[0]: (i[1] + self.costDict.get(fromNode))})
+                        self.routeList.append([i[0], fromNode])
+                    # 大于本节点到 fromNode 再到该节点的开销，应该先删原来的，再添加新的路由项
+                    elif (i[1] +
+                          self.costDict.get(fromNode)) < self.costDict.get(
+                              i[0]):
+                        self.costDict.update(
+                            {i[0]: (i[1] + self.costDict.get(fromNode))})
+                        for route in self.routeList:
+                            if route[0] == i[0]:
+                                self.routeList.remove(route)
+                        self.routeList.append([i[0], fromNode])
+            print(self.costDict)
+            print(self.routeList)
+            # 接下来要给周围其他可发消息的邻居路由，发送本节点与fromNode建立通信
+            # 消息类型是 PATH_DISTANCE_MSG
+        elif msgtype == "PATH_DISTANCE_MSG":
+            pass
+        else:
+            pass
 
     def getRoute():
         pass

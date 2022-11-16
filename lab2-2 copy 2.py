@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
     topoFile = open("./topology.txt", "r", encoding='utf-8')
 
-    node = netnode.Node("nodeF", portFile, topoFile)
+    node = netnode.Node("nodeB", portFile, topoFile)
     # print(node.costDict)
 
     # listen端口不变，send端口+100

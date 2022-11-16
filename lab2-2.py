@@ -15,7 +15,6 @@ msgsToSend = []
 def myDecode(msgRecv: str, node: netnode.Node):
     type = ''
     fromNode = ''
-    index = 2  # 读指针的位置，从2开始需要遍历读，初始化为2
     infoList = re.findall(r"\w+", msgRecv)
     # 如果type未被定义，则先判断type，和来源节点
     if type == '':
@@ -26,25 +25,50 @@ def myDecode(msgRecv: str, node: netnode.Node):
         elif infoList[0] == 'PATH_DISTANCE_MSG':
             type = 'PATH_DISTANCE_MSG'
         fromNode = infoList[1]
-    if type == 'PING_MSG':
-        # 更新这两个节点间开销
-        node.updateCostFromCertainNode(fromNode)
 
-        # TODO 还需要更新路由表
+    if type == 'PING_MSG':
+        # 更新这两个节点间开销 and 自己节点的路由表
+        node.updateCostAndRoute(type, fromNode)
 
         # 加入一条 REPLY 消息到消息队列中
+        # REPLY 包含了源节点到本节点的开销，和本节点到已知的其他全部节点的开销
+        # 本节点和源节点的开销应作为第一组数据
         msg = "PING_MSG_REPLY/" + node.name + "/"
         for key in node.costDict.keys():
-            msg += key + "/" + str(node.costDict.get(key)) + "/"
+            if key == fromNode:
+                msg += key + "/" + str(node.costDict.get(key)) + "/"
+        for key in node.costDict.keys():
+            if key != fromNode:
+                msg += key + "/" + str(node.costDict.get(key)) + "/"
         msgsToSend.append(
             [msg.encode("utf-8"), ("127.0.0.1", node.portDict.get(fromNode))])
-    elif type == 'PING_MSG_REPLY':
-        for i in range(2, len(infoList)):
-            print(infoList[i])
 
-        # TODO 根据 REPLY 消息中的信息，更新开销和路由表
+    elif type == 'PING_MSG_REPLY':
+        # 从第3条（index为2）开始是节点间开销数据
+        costList = []
+        for i in range(2, len(infoList), 2):
+            costList.append([infoList[i], int(infoList[i + 1])])
+        print(costList)
+
+        # 根据 REPLY 消息中的信息，更新开销路由表
+        node.updateCostAndRoute(type, fromNode, costList)
+
+        # 向其他邻居可用节点发送 PATH_DISTANCE_MSG 消息
+        # 消息携带所有已知开销
+        msg = "PATH_DISTANCE_MSG/" + node.name + "/"
+        for key in node.costDict.keys():
+            msg += key + "/" + str(node.costDict.get(key)) + "/"
+        # print(msg)
+        for otherNode in node.neighborName:
+            if otherNode != fromNode and otherNode != node.name:
+                msgsToSend.append([
+                    msg.encode("utf-8"),
+                    ("127.0.0.1", node.portDict.get(otherNode))
+                ])
 
     elif type == 'PATH_DISTANCE_MSG':
+        # TODO 接收信息，更新开销表和路由表
+        # TODO 转发相关信息
         pass
 
 
