@@ -43,7 +43,18 @@ def myDecode(msgRecv: str, node: netnode.Node):
         msgsToSend.append(
             [msg.encode("utf-8"), ("127.0.0.1", node.portDict.get(fromNode))])
 
-    elif type == 'PING_MSG_REPLY':
+        # 还需要向周围“其他”节点加入 PATH_DISTANCE_MSG
+        # 包含了刚刚更新的信息
+        msg = "PATH_DISTANCE_MSG/" + node.name + "/"
+        msg += fromNode + "/" + str(node.costDict.get(fromNode)) + "/"
+        for nodeToSend in node.portDict.keys():
+            if nodeToSend != fromNode:
+                msgsToSend.append([
+                    msg.encode("utf-8"),
+                    ("127.0.0.1", node.portDict.get(nodeToSend))
+                ])
+
+    elif type == 'PING_MSG_REPLY' or type == 'PATH_DISTANCE_MSG':
         # 从第3条（index为2）开始是节点间开销数据
         costList = []
         for i in range(2, len(infoList), 2):
@@ -53,23 +64,34 @@ def myDecode(msgRecv: str, node: netnode.Node):
         # 根据 REPLY 消息中的信息，更新开销路由表
         node.updateCostAndRoute(type, fromNode, costList)
 
+        # 如果有开销的变化
         # 向其他邻居可用节点发送 PATH_DISTANCE_MSG 消息
         # 消息携带所有已知开销
-        msg = "PATH_DISTANCE_MSG/" + node.name + "/"
-        for key in node.costDict.keys():
-            msg += key + "/" + str(node.costDict.get(key)) + "/"
-        # print(msg)
-        for otherNode in node.neighborName:
-            if otherNode != fromNode and otherNode != node.name:
-                msgsToSend.append([
-                    msg.encode("utf-8"),
-                    ("127.0.0.1", node.portDict.get(otherNode))
-                ])
+        if node.ifChangedCost is True:
+            msg = 'PATH_DISTANCE_MSG' + node.name + "/"
+            for key in node.costDict.keys():
+                msg += key + "/" + str(node.costDict.get(key)) + "/"
+            # print(msg)
+            for otherNode in node.neighborName:
+                if otherNode != fromNode and otherNode != node.name:
+                    msgsToSend.append([
+                        msg.encode("utf-8"),
+                        ("127.0.0.1", node.portDict.get(otherNode))
+                    ])
 
-    elif type == 'PATH_DISTANCE_MSG':
-        # TODO 接收信息，更新开销表和路由表
-        # TODO 转发相关信息
-        pass
+    # elif type == 'PATH_DISTANCE_MSG':
+    #     # TODO 接收信息，更新开销表和路由表
+    #     # 从第3条（index为2）开始是节点间开销数据
+    #     costList = []
+    #     for i in range(2, len(infoList), 2):
+    #         costList.append([infoList[i], int(infoList[i + 1])])
+    #     print(costList)
+
+    #     # 根据 REPLY 消息中的信息，更新开销路由表
+    #     node.updateCostAndRoute(type, fromNode, costList)
+
+    #     # TODO 转发相关信息
+    #     pass
 
 
 def listenToOtherNode(socket: socket.socket, node: netnode.Node) -> None:
@@ -90,9 +112,10 @@ def sendToOtherNode(socket: socket.socket) -> None:
 
 
 def listenToUser(node: netnode.Node) -> None:
-    cmd = input()
-    if "disp_rt" == cmd:
-        print(node.getRoute())
+    while True:
+        cmd = input()
+        if "disp_rt" == cmd:
+            print(node.getRoute())
 
 
 if __name__ == "__main__":
@@ -117,16 +140,19 @@ if __name__ == "__main__":
 
     # 创建三个线程
     # 监听其他端口的消息
-    listen_thread = threading.Thread(target=listenToOtherNode,
-                                     args=(
-                                         udp_listen_socket,
-                                         node,
-                                     ))
-    listen_thread.start()
+    listen_port_thread = threading.Thread(target=listenToOtherNode,
+                                          args=(
+                                              udp_listen_socket,
+                                              node,
+                                          ))
+    listen_port_thread.start()
     # 向其他端口发送消息
     send_thread = threading.Thread(target=sendToOtherNode,
                                    args=(udp_send_socket, ))
     send_thread.start()
+    # 监听用户指令
+    listen_cmd_thread = threading.Thread(target=listenToUser, args=(node, ))
+    listen_cmd_thread.start()
 
     # 向相邻节点发送 PING_MSG
     for neighborNode in node.portDict:
